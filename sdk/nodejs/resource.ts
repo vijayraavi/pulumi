@@ -466,6 +466,13 @@ export interface CustomResourceOptions extends ResourceOptions {
      * to mark certain ouputs as a secrets on a per resource basis.
      */
     additionalSecretOutputs?: string[];
+
+    /**
+     * TODO(pdg): real comment about importing, etc. etc.
+     *
+     * also, maybe make this an Input<>
+     */
+    importID?: ID;
 }
 
 /**
