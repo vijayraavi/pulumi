@@ -21,6 +21,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/pulumi/pulumi/pkg/diag"
 
+	"github.com/pulumi/pulumi/pkg/diag"
 	"github.com/pulumi/pulumi/pkg/diag/colors"
 	"github.com/pulumi/pulumi/pkg/resource"
 	"github.com/pulumi/pulumi/pkg/resource/deploy/providers"
@@ -710,6 +711,70 @@ func (s *RefreshStep) Apply(preview bool) (resource.Status, StepCompleteFunc, er
 	return rst, complete, err
 }
 
+type ImportStep struct {
+	plan *Plan                 // the current plan.
+	reg  RegisterResourceEvent // the registration intent to convey a URN back to.
+	old  *resource.State       // the state of the existing resource.
+	new  *resource.State       // the newly computed state of the resource after updating.
+	diff plugin.DiffResult     // the diff result from the provider.
+}
+
+func NewImportStep(plan *Plan, reg RegisterResourceEvent, old *resource.State,
+	new *resource.State, diff plugin.DiffResult) Step {
+	contract.Assert(old != nil)
+	contract.Assert(old.URN != "")
+	contract.Assert(old.ID != "")
+	contract.Assert(old.Custom)
+	contract.Assert(!old.Delete)
+	contract.Assert(!old.External)
+	contract.Assert(new != nil)
+	contract.Assert(new.URN != "")
+	contract.Assert(new.ID == "")
+	contract.Assert(new.Custom)
+	contract.Assert(!new.Delete)
+	contract.Assert(!new.External)
+	contract.Assert(old.Type == new.Type)
+
+	return &ImportStep{
+		plan: plan,
+		reg:  reg,
+		old:  old,
+		new:  new,
+		diff: diff,
+	}
+}
+
+func (s *ImportStep) Op() StepOp           { return OpImport }
+func (s *ImportStep) Plan() *Plan          { return s.plan }
+func (s *ImportStep) Type() tokens.Type    { return s.old.Type }
+func (s *ImportStep) Provider() string     { return s.old.Provider }
+func (s *ImportStep) URN() resource.URN    { return s.old.URN }
+func (s *ImportStep) Old() *resource.State { return s.old }
+func (s *ImportStep) New() *resource.State { return s.new }
+func (s *ImportStep) Res() *resource.State { return s.new }
+func (s *ImportStep) Logical() bool        { return true }
+
+func (s *ImportStep) Apply(preview bool) (resource.Status, StepCompleteFunc, error) {
+	complete := func() { s.reg.Done(&RegisterResult{State: s.new}) }
+
+	if s.diff.Changes != plugin.DiffNone {
+		const message = "inputs to import do not match the existing resource"
+
+		var err error
+		if preview {
+			s.plan.ctx.Diag.Errorf(diag.StreamMessage(s.old.URN, message+"; importing this resource will fail", 0))
+		} else {
+			err = errors.New(message)
+		}
+
+		return resource.StatusOK, complete, err
+	}
+
+	s.new.ID = s.old.ID
+	s.new.Outputs = s.old.Outputs
+	return resource.StatusOK, complete, nil
+}
+
 // StepOp represents the kind of operation performed by a step.  It evaluates to its string label.
 type StepOp string
 
@@ -727,6 +792,7 @@ const (
 	OpReadDiscard          StepOp = "discard"                // removing a resource that was read.
 	OpDiscardReplaced      StepOp = "discard-replaced"       // discarding a read resource that was replaced.
 	OpRemovePendingReplace StepOp = "remove-pending-replace" // removing a pending replace resource.
+	OpImport               StepOp = "import"                 // import an existing resource.
 )
 
 // StepOps contains the full set of step operation types.
@@ -744,6 +810,7 @@ var StepOps = []StepOp{
 	OpReadDiscard,
 	OpDiscardReplaced,
 	OpRemovePendingReplace,
+	OpImport,
 }
 
 // Color returns a suggested color for lines of this op type.
@@ -751,7 +818,7 @@ func (op StepOp) Color() string {
 	switch op {
 	case OpSame:
 		return colors.SpecUnimportant
-	case OpCreate:
+	case OpCreate, OpImport:
 		return colors.SpecCreate
 	case OpDelete:
 		return colors.SpecDelete
@@ -809,6 +876,8 @@ func (op StepOp) RawPrefix() string {
 		return "< "
 	case OpDiscardReplaced:
 		return "<<"
+	case OpImport:
+		return "+>"
 	default:
 		contract.Failf("Unrecognized resource step op: %v", op)
 		return ""
@@ -825,6 +894,8 @@ func (op StepOp) PastTense() string {
 		return "read"
 	case OpReadDiscard, OpDiscardReplaced:
 		return "discarded"
+	case OpImport:
+		return "imported"
 	default:
 		contract.Failf("Unexpected resource step op: %v", op)
 		return ""

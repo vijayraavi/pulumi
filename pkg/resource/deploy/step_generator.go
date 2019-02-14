@@ -186,6 +186,50 @@ func (sg *stepGenerator) GenerateSteps(event RegisterResourceEvent) ([]Step, res
 	// We may be creating this resource if it previously existed in the snapshot as an External resource
 	wasExternal := hasOld && old.External
 
+	// If the goal contains an ID, this may be an import. An import occurs if there is no old resource or if the old
+	// resource's ID does not match the ID in the goal state.
+	isImport := goal.Custom && goal.ID != "" && (!hasOld || old.ID != goal.ID)
+
+	// If this is an import, we need to fetch the current state of the resource. If there was an old resource, we need
+	// to mark it for deletion.
+	original := old
+	if isImport {
+		contract.Assert(prov != nil)
+
+		// If there was an old resource, schedule it for deletion.
+		if hasOld && !recreating {
+			old.Delete = true
+		}
+
+		// Now fetch the current state from the provider.
+		state, _, err := prov.Read(urn, goal.ID, nil)
+		if err != nil {
+			return nil, result.FromError(err)
+		}
+		oldOutputs = state
+
+		var initErrors []string
+		if initErr, isInitErr := err.(*plugin.InitError); isInitErr {
+			initErrors = initErr.Reasons
+		}
+
+		// TODO(pdg): do something real about inputs
+		oldInputs = make(resource.PropertyMap)
+
+		// Update the old state with the state we just pulled
+		old = resource.NewState(goal.Type, urn, goal.Custom, false, goal.ID, oldInputs, state, goal.Parent, goal.Protect,
+			false, goal.Dependencies, initErrors, goal.Provider, nil, false)
+
+		// Clear the external bit if it is set.
+		wasExternal = false
+
+		// Pretend that we had an old state.
+		hasOld = true
+
+		// Clear the recreating bit.
+		recreating = false
+	}
+
 	// Ensure the provider is okay with this resource and fetch the inputs to pass to subsequent methods.
 	var err error
 	if prov != nil {
@@ -206,6 +250,15 @@ func (sg *stepGenerator) GenerateSteps(event RegisterResourceEvent) ([]Step, res
 			invalid = true
 		}
 		new.Inputs = inputs
+
+		// TODO(pdg): do something real about inputs
+		if isImport {
+			for k := range new.Inputs {
+				if v, ok := oldOutputs[k]; ok {
+					oldInputs[k] = v
+				}
+			}
+		}
 	}
 
 	// Next, give each analyzer -- if any -- a chance to inspect the resource too.
@@ -314,6 +367,11 @@ func (sg *stepGenerator) GenerateSteps(event RegisterResourceEvent) ([]Step, res
 		if diff.Changes != plugin.DiffNone && diff.Changes != plugin.DiffSome {
 			return nil, result.Errorf(
 				"unrecognized diff state for %s: %d", urn, diff.Changes)
+		}
+
+		// If this is an import, we can terminate here. We just want the diff.
+		if isImport {
+			return []Step{NewImportStep(sg.plan, event, old, new, diff)}, nil
 		}
 
 		// If there were changes, check for a replacement vs. an in-place update.

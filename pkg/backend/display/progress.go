@@ -1075,6 +1075,8 @@ func (display *ProgressDisplay) getStepDoneDescription(step engine.StepEventMeta
 				return "refreshing failed"
 			case deploy.OpReadDiscard, deploy.OpDiscardReplaced:
 				return "discarding failed"
+			case deploy.OpImport:
+				return "importing failed"
 			}
 		} else {
 			switch op {
@@ -1103,6 +1105,8 @@ func (display *ProgressDisplay) getStepDoneDescription(step engine.StepEventMeta
 				return "discarded"
 			case deploy.OpDiscardReplaced:
 				return "discarded original"
+			case deploy.OpImport:
+				return "imported"
 			}
 		}
 
@@ -1143,7 +1147,9 @@ func (display *ProgressDisplay) getPreviewText(step engine.StepEventMetadata) st
 	case deploy.OpReadDiscard:
 		return "discard"
 	case deploy.OpDiscardReplaced:
-		return "discard origina;"
+		return "discard original"
+	case deploy.OpImport:
+		return "import"
 	}
 
 	contract.Failf("Unrecognized resource step op: %v", step.Op)
@@ -1172,6 +1178,8 @@ func (display *ProgressDisplay) getPreviewDoneText(step engine.StepEventMetadata
 		return "refresh"
 	case deploy.OpReadDiscard:
 		return "discard"
+	case deploy.OpImport:
+		return "import"
 	}
 
 	contract.Failf("Unrecognized resource step op: %v", step.Op)
@@ -1246,6 +1254,8 @@ func (display *ProgressDisplay) getStepInProgressDescription(step engine.StepEve
 			return "discarding"
 		case deploy.OpDiscardReplaced:
 			return "discarding original"
+		case deploy.OpImport:
+			return "importing"
 		}
 
 		contract.Failf("Unrecognized resource step op: %v", op)

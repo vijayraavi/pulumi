@@ -131,11 +131,13 @@ func (j *Journal) Snap(base *deploy.Snapshot) *deploy.Snapshot {
 				ops = append(ops, resource.NewOperation(e.Step.New(), resource.OperationTypeReading))
 			case deploy.OpUpdate:
 				ops = append(ops, resource.NewOperation(e.Step.New(), resource.OperationTypeUpdating))
+			case deploy.OpImport:
+				ops = append(ops, resource.NewOperation(e.Step.New(), resource.OperationTypeImporting))
 			}
 		case JournalEntryFailure, JournalEntrySuccess:
 			switch e.Step.Op() {
 			// nolint: lll
-			case deploy.OpCreate, deploy.OpCreateReplacement, deploy.OpRead, deploy.OpReadReplacement, deploy.OpUpdate:
+			case deploy.OpCreate, deploy.OpCreateReplacement, deploy.OpRead, deploy.OpReadReplacement, deploy.OpUpdate, deploy.OpImport:
 				doneOps[e.Step.New()] = true
 			case deploy.OpDelete, deploy.OpDeleteReplaced, deploy.OpReadDiscard, deploy.OpDiscardReplaced:
 				doneOps[e.Step.Old()] = true
@@ -166,6 +168,9 @@ func (j *Journal) Snap(base *deploy.Snapshot) *deploy.Snapshot {
 				}
 			case deploy.OpRemovePendingReplace:
 				dones[e.Step.Old()] = true
+			case deploy.OpImport:
+				resources = append(resources, e.Step.New())
+				dones[e.Step.New()] = true
 			}
 		}
 	}
