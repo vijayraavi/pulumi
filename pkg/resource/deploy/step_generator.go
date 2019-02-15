@@ -202,22 +202,25 @@ func (sg *stepGenerator) GenerateSteps(event RegisterResourceEvent) ([]Step, res
 		}
 
 		// Now fetch the current state from the provider.
-		state, _, err := prov.Read(urn, goal.ID, nil)
+		read, _, err := prov.Read(urn, goal.ID, nil)
 		if err != nil {
 			return nil, result.FromError(err)
 		}
-		oldOutputs = state
+		if read.Inputs == nil {
+			return nil, result.Errorf(
+				"resource '%v' cannot be imported; please try updating to the newest version of the '%v' provider.",
+				urn, urn.Type().Package())
+		}
+
+		oldOutputs, oldInputs = read.Outputs, read.Inputs
 
 		var initErrors []string
 		if initErr, isInitErr := err.(*plugin.InitError); isInitErr {
 			initErrors = initErr.Reasons
 		}
 
-		// TODO(pdg): do something real about inputs
-		oldInputs = make(resource.PropertyMap)
-
 		// Update the old state with the state we just pulled
-		old = resource.NewState(goal.Type, urn, goal.Custom, false, goal.ID, oldInputs, state, goal.Parent, goal.Protect,
+		old = resource.NewState(goal.Type, urn, goal.Custom, false, goal.ID, oldInputs, oldOutputs, goal.Parent, goal.Protect,
 			false, goal.Dependencies, initErrors, goal.Provider, nil, false)
 
 		// Clear the external bit if it is set.
@@ -250,15 +253,6 @@ func (sg *stepGenerator) GenerateSteps(event RegisterResourceEvent) ([]Step, res
 			invalid = true
 		}
 		new.Inputs = inputs
-
-		// TODO(pdg): do something real about inputs
-		if isImport {
-			for k := range new.Inputs {
-				if v, ok := oldOutputs[k]; ok {
-					oldInputs[k] = v
-				}
-			}
-		}
 	}
 
 	// Next, give each analyzer -- if any -- a chance to inspect the resource too.
