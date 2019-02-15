@@ -762,7 +762,7 @@ func (s *ImportStep) Apply(preview bool) (resource.Status, StepCompleteFunc, err
 
 		var err error
 		if preview {
-			s.plan.ctx.Diag.Errorf(diag.StreamMessage(s.old.URN, message+"; importing this resource will fail", 0))
+			s.plan.ctx.Diag.Warningf(diag.StreamMessage(s.old.URN, message+"; importing this resource will fail", 0))
 		} else {
 			err = errors.New(message)
 		}

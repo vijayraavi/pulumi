@@ -365,6 +365,11 @@ func (sg *stepGenerator) GenerateSteps(event RegisterResourceEvent) ([]Step, res
 
 		// If this is an import, we can terminate here. We just want the diff.
 		if isImport {
+			// This is kind of distasteful, but suppresses a bunch of noise when dealing with inexactness regarding which
+			// properties should be considered inputs in TF providers.
+			if diff.Changes == plugin.DiffNone {
+				old.Inputs = new.Inputs
+			}
 			return []Step{NewImportStep(sg.plan, event, old, new, diff)}, nil
 		}
 
