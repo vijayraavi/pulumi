@@ -572,6 +572,7 @@ func (p *provider) Diff(urn resource.URN, id resource.ID,
 		ChangedKeys:         diffs,
 		DetailedDiff:        decodeDetailedDiff(resp),
 		DeleteBeforeReplace: deleteBeforeReplace,
+		Properties:          properties,
 	}, nil
 }
 
