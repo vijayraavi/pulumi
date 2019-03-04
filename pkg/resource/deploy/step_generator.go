@@ -202,6 +202,8 @@ func (sg *stepGenerator) GenerateSteps(event RegisterResourceEvent) ([]Step, res
 		}
 
 		// Now fetch the current state from the provider.
+		//
+		// NOTE: we probably do not want to do this here, as the step generator runs serially.
 		read, _, err := prov.Read(urn, goal.ID, nil)
 		if err != nil {
 			return nil, result.FromError(err)
