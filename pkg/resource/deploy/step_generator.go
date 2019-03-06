@@ -188,51 +188,36 @@ func (sg *stepGenerator) GenerateSteps(event RegisterResourceEvent) ([]Step, res
 
 	// If the goal contains an ID, this may be an import. An import occurs if there is no old resource or if the old
 	// resource's ID does not match the ID in the goal state.
-	isImport := goal.Custom && goal.ID != "" && (!hasOld || old.ID != goal.ID)
-
-	// If this is an import, we need to fetch the current state of the resource. If there was an old resource, we need
-	// to mark it for deletion.
-	original := old
+	isImport := goal.Custom && goal.ID != "" && (!hasOld || old.External || old.ID != goal.ID)
 	if isImport {
-		contract.Assert(prov != nil)
-
 		// If there was an old resource, schedule it for deletion.
 		if hasOld && !recreating {
 			old.Delete = true
 		}
 
-		// Now fetch the current state from the provider.
-		//
-		// NOTE: we probably do not want to do this here, as the step generator runs serially.
-		read, _, err := prov.Read(urn, goal.ID, nil)
-		if err != nil {
-			return nil, result.FromError(err)
+		// Write the ID of the resource to import into the new state and return an ImportStep.
+		s.new.ID = goal.ID
+		return []Step{NewImportStep(sg.plan, event, new)}, nil
+
+		// If this is an import, we can terminate here. We just want the diff.
+		if isImport {
+			// This is kind of distasteful, but suppresses a bunch of noise when dealing with inexactness regarding which
+			// properties should be considered inputs in TF providers.
+			switch diff.Changes {
+			case plugin.DiffNone:
+				old.Inputs = new.Inputs
+			case plugin.DiffSome:
+				changed := make(map[resource.PropertyKey]bool)
+				for _, n := range diff.Properties {
+					changed[n] = true
+				}
+				for k := range old.Inputs {
+					if _, has := new.Inputs[k]; !has && !changed[k] {
+						delete(old.Inputs, k)
+					}
+				}
+			}
 		}
-		if read.Inputs == nil {
-			return nil, result.Errorf(
-				"resource '%v' cannot be imported; please try updating to the newest version of the '%v' provider.",
-				urn, urn.Type().Package())
-		}
-
-		oldOutputs, oldInputs = read.Outputs, read.Inputs
-
-		var initErrors []string
-		if initErr, isInitErr := err.(*plugin.InitError); isInitErr {
-			initErrors = initErr.Reasons
-		}
-
-		// Update the old state with the state we just pulled
-		old = resource.NewState(goal.Type, urn, goal.Custom, false, goal.ID, oldInputs, oldOutputs, goal.Parent, goal.Protect,
-			false, goal.Dependencies, initErrors, goal.Provider, nil, false)
-
-		// Clear the external bit if it is set.
-		wasExternal = false
-
-		// Pretend that we had an old state.
-		hasOld = true
-
-		// Clear the recreating bit.
-		recreating = false
 	}
 
 	// Ensure the provider is okay with this resource and fetch the inputs to pass to subsequent methods.
@@ -251,7 +236,7 @@ func (sg *stepGenerator) GenerateSteps(event RegisterResourceEvent) ([]Step, res
 
 		if err != nil {
 			return nil, result.FromError(err)
-		} else if sg.issueCheckErrors(new, urn, failures) {
+		} else if issueCheckErrors(sg.plan, new, urn, failures) {
 			invalid = true
 		}
 		new.Inputs = inputs
@@ -356,34 +341,12 @@ func (sg *stepGenerator) GenerateSteps(event RegisterResourceEvent) ([]Step, res
 			} else {
 				return nil, result.FromError(err)
 			}
-
 		}
 
 		// Ensure that we received a sensible response.
 		if diff.Changes != plugin.DiffNone && diff.Changes != plugin.DiffSome {
 			return nil, result.Errorf(
 				"unrecognized diff state for %s: %d", urn, diff.Changes)
-		}
-
-		// If this is an import, we can terminate here. We just want the diff.
-		if isImport {
-			// This is kind of distasteful, but suppresses a bunch of noise when dealing with inexactness regarding which
-			// properties should be considered inputs in TF providers.
-			switch diff.Changes {
-			case plugin.DiffNone:
-				old.Inputs = new.Inputs
-			case plugin.DiffSome:
-				changed := make(map[resource.PropertyKey]bool)
-				for _, n := range diff.Properties {
-					changed[n] = true
-				}
-				for k := range old.Inputs {
-					if _, has := new.Inputs[k]; !has && !changed[k] {
-						delete(old.Inputs, k)
-					}
-				}
-			}
-			return []Step{NewImportStep(sg.plan, event, old, new, diff)}, nil
 		}
 
 		// If there were changes, check for a replacement vs. an in-place update.
@@ -398,7 +361,7 @@ func (sg *stepGenerator) GenerateSteps(event RegisterResourceEvent) ([]Step, res
 					inputs, failures, err = prov.Check(urn, nil, goal.Properties, allowUnknowns)
 					if err != nil {
 						return nil, result.FromError(err)
-					} else if sg.issueCheckErrors(new, urn, failures) {
+					} else if issueCheckErrors(sg.plan, new, urn, failures) {
 						return nil, result.Bail()
 					}
 					new.Inputs = inputs
@@ -796,18 +759,17 @@ func (sg *stepGenerator) diff(urn resource.URN, old, new *resource.State, oldInp
 }
 
 // issueCheckErrors prints any check errors to the diagnostics sink.
-func (sg *stepGenerator) issueCheckErrors(new *resource.State, urn resource.URN,
-	failures []plugin.CheckFailure) bool {
+func issueCheckErrors(plan *Plan, new *resource.State, urn resource.URN, failures []plugin.CheckFailure) bool {
 	if len(failures) == 0 {
 		return false
 	}
 	inputs := new.Inputs
 	for _, failure := range failures {
 		if failure.Property != "" {
-			sg.plan.Diag().Errorf(diag.GetResourcePropertyInvalidValueError(urn),
+			plan.Diag().Errorf(diag.GetResourcePropertyInvalidValueError(urn),
 				new.Type, urn.Name(), failure.Property, inputs[failure.Property], failure.Reason)
 		} else {
-			sg.plan.Diag().Errorf(
+			plan.Diag().Errorf(
 				diag.GetResourceInvalidError(urn), new.Type, urn.Name(), failure.Reason)
 		}
 	}

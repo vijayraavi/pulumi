@@ -714,33 +714,21 @@ func (s *RefreshStep) Apply(preview bool) (resource.Status, StepCompleteFunc, er
 type ImportStep struct {
 	plan *Plan                 // the current plan.
 	reg  RegisterResourceEvent // the registration intent to convey a URN back to.
-	old  *resource.State       // the state of the existing resource.
 	new  *resource.State       // the newly computed state of the resource after updating.
-	diff plugin.DiffResult     // the diff result from the provider.
 }
 
-func NewImportStep(plan *Plan, reg RegisterResourceEvent, old *resource.State,
-	new *resource.State, diff plugin.DiffResult) Step {
-	contract.Assert(old != nil)
-	contract.Assert(old.URN != "")
-	contract.Assert(old.ID != "")
-	contract.Assert(old.Custom)
-	contract.Assert(!old.Delete)
-	contract.Assert(!old.External)
+func NewImportStep(plan *Plan, reg RegisterResourceEvent, new *resource.State) Step {
 	contract.Assert(new != nil)
 	contract.Assert(new.URN != "")
 	contract.Assert(new.ID == "")
 	contract.Assert(new.Custom)
 	contract.Assert(!new.Delete)
 	contract.Assert(!new.External)
-	contract.Assert(old.Type == new.Type)
 
 	return &ImportStep{
 		plan: plan,
 		reg:  reg,
-		old:  old,
 		new:  new,
-		diff: diff,
 	}
 }
 
@@ -757,22 +745,56 @@ func (s *ImportStep) Logical() bool        { return true }
 func (s *ImportStep) Apply(preview bool) (resource.Status, StepCompleteFunc, error) {
 	complete := func() { s.reg.Done(&RegisterResult{State: s.new}) }
 
+	// Read the current state of the resource to import. If the provider does not hand us back any inputs for the
+	// resource, it probably needs to be updated. If the resource does not exist at all, fail the import.
+	prov, err := getProvider(s)
+	if err != nil {
+		return resource.StatusOK, nil, err
+	}
+	read, rst, err := prov.Read(s.new.URN, s.new.ID, nil)
+	if err != nil {
+		if initErrors, isInitErr := err.(*plugin.InitError); isInitErr {
+			s.new.InitErrors = initErrors
+		} else {
+			return resource.StatusOK, nil, err
+		}
+	}
+	if read.Outputs == nil {
+		return resource.StatusOK, nil, errors.Errorf(
+			"physical resource '%v' does not exist", s.new.ID)
+	}
+	if read.Inputs == nil {
+		return resource.StatusOK, nil, errors.Errorf(
+			"provider does not support importing resources; please try updating the '%v' plugin",
+			s.new.URN.Type().Package())
+	}
+	s.new.Outputs = read.Outputs
+
+	// Check the user inputs using the provider inputs for defaults.
+	inputs, failures, err := prov.Check(s.new.URN, read.Inputs, s.new.Inputs, preview)
+	if err != nil {
+		return resource.StatusOK, nil, err
+	}
+	if issueCheckErrors(s.plan, s.new, s.new.URN, failures) {
+		return resource.StatusOK, nil, errors.New("one or more inputs failed to validate")
+	}
+	s.new.Inputs = inputs
+
+	// Diff the user inputs against the provider inputs. If there are any differences, fail the import.
+	diff, err := diffResource(s.new.URN, s.new.ID, read.Inputs, read.Ouptuts, s.new.Inputs, prov, preview)
+	if err != nil {
+		return resource.StatusOK, nil, err
+	}
 	if s.diff.Changes != plugin.DiffNone {
 		const message = "inputs to import do not match the existing resource"
 
-		var err error
 		if preview {
-			s.plan.ctx.Diag.Warningf(diag.StreamMessage(s.old.URN, message+"; importing this resource will fail", 0))
+			s.plan.ctx.Diag.Warningf(diag.StreamMessage(s.new.URN, message+"; importing this resource will fail", 0))
 		} else {
 			err = errors.New(message)
 		}
-
-		return resource.StatusOK, complete, err
 	}
-
-	s.new.ID = s.old.ID
-	s.new.Outputs = s.old.Outputs
-	return resource.StatusOK, complete, nil
+	return resource.StatusOK, complete, err
 }
 
 // StepOp represents the kind of operation performed by a step.  It evaluates to its string label.
