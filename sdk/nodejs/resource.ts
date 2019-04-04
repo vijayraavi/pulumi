@@ -468,11 +468,12 @@ export interface CustomResourceOptions extends ResourceOptions {
     additionalSecretOutputs?: string[];
 
     /**
-     * TODO(pdg): real comment about importing, etc. etc.
-     *
-     * also, maybe make this an Input<>
+     * When provided with a resource ID, import indicates that this resource's provider should import its state from
+     * the cloud resource with the given ID. The inputs to the resource's constructor must align with the resource's
+     * current state. Once a resource has been imported, the import property must be removed from the resource's
+     * options.
      */
-    importID?: ID;
+    import?: ID;
 }
 
 /**

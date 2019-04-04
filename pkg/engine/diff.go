@@ -202,7 +202,7 @@ func GetResourcePropertiesDetails(
 		if !summary {
 			PrintObject(&b, old.Inputs, planning, indent, step.Op, false, debug)
 		}
-	} else if len(new.Outputs) > 0 {
+	} else if len(new.Outputs) > 0 && step.Op != deploy.OpImport {
 		printOldNewDiffs(&b, old.Outputs, new.Outputs, nil, planning, indent, step.Op, summary, debug)
 	} else {
 		printOldNewDiffs(&b, old.Inputs, new.Inputs, step.Diffs, planning, indent, step.Op, summary, debug)

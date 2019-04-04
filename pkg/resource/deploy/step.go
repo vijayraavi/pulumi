@@ -712,15 +712,17 @@ func (s *RefreshStep) Apply(preview bool) (resource.Status, StepCompleteFunc, er
 }
 
 type ImportStep struct {
-	plan *Plan                 // the current plan.
-	reg  RegisterResourceEvent // the registration intent to convey a URN back to.
-	new  *resource.State       // the newly computed state of the resource after updating.
+	plan  *Plan                  // the current plan.
+	reg   RegisterResourceEvent  // the registration intent to convey a URN back to.
+	old   *resource.State        // the state of the resource fetched from the provider.
+	new   *resource.State        // the newly computed state of the resource after importing.
+	diffs []resource.PropertyKey // any keys that differed between the user's program and the actual state.
 }
 
 func NewImportStep(plan *Plan, reg RegisterResourceEvent, new *resource.State) Step {
 	contract.Assert(new != nil)
 	contract.Assert(new.URN != "")
-	contract.Assert(new.ID == "")
+	contract.Assert(new.ID != "")
 	contract.Assert(new.Custom)
 	contract.Assert(!new.Delete)
 	contract.Assert(!new.External)
@@ -732,15 +734,16 @@ func NewImportStep(plan *Plan, reg RegisterResourceEvent, new *resource.State) S
 	}
 }
 
-func (s *ImportStep) Op() StepOp           { return OpImport }
-func (s *ImportStep) Plan() *Plan          { return s.plan }
-func (s *ImportStep) Type() tokens.Type    { return s.old.Type }
-func (s *ImportStep) Provider() string     { return s.old.Provider }
-func (s *ImportStep) URN() resource.URN    { return s.old.URN }
-func (s *ImportStep) Old() *resource.State { return s.old }
-func (s *ImportStep) New() *resource.State { return s.new }
-func (s *ImportStep) Res() *resource.State { return s.new }
-func (s *ImportStep) Logical() bool        { return true }
+func (s *ImportStep) Op() StepOp                    { return OpImport }
+func (s *ImportStep) Plan() *Plan                   { return s.plan }
+func (s *ImportStep) Type() tokens.Type             { return s.new.Type }
+func (s *ImportStep) Provider() string              { return s.new.Provider }
+func (s *ImportStep) URN() resource.URN             { return s.new.URN }
+func (s *ImportStep) Old() *resource.State          { return s.old }
+func (s *ImportStep) New() *resource.State          { return s.new }
+func (s *ImportStep) Res() *resource.State          { return s.new }
+func (s *ImportStep) Logical() bool                 { return true }
+func (s *ImportStep) Diffs() []resource.PropertyKey { return s.diffs }
 
 func (s *ImportStep) Apply(preview bool) (resource.Status, StepCompleteFunc, error) {
 	complete := func() { s.reg.Done(&RegisterResult{State: s.new}) }
@@ -751,17 +754,16 @@ func (s *ImportStep) Apply(preview bool) (resource.Status, StepCompleteFunc, err
 	if err != nil {
 		return resource.StatusOK, nil, err
 	}
-	read, rst, err := prov.Read(s.new.URN, s.new.ID, nil)
+	read, rst, err := prov.Read(s.new.URN, s.new.ID, nil, nil)
 	if err != nil {
-		if initErrors, isInitErr := err.(*plugin.InitError); isInitErr {
-			s.new.InitErrors = initErrors
+		if initErr, isInitErr := err.(*plugin.InitError); isInitErr {
+			s.new.InitErrors = initErr.Reasons
 		} else {
-			return resource.StatusOK, nil, err
+			return rst, nil, err
 		}
 	}
 	if read.Outputs == nil {
-		return resource.StatusOK, nil, errors.Errorf(
-			"physical resource '%v' does not exist", s.new.ID)
+		return rst, nil, errors.Errorf("resource '%v' does not exist", s.new.ID)
 	}
 	if read.Inputs == nil {
 		return resource.StatusOK, nil, errors.Errorf(
@@ -770,22 +772,29 @@ func (s *ImportStep) Apply(preview bool) (resource.Status, StepCompleteFunc, err
 	}
 	s.new.Outputs = read.Outputs
 
+	// Magic up an old state so the frontend can display a proper diff.
+	s.old = resource.NewState(s.new.Type, s.new.URN, s.new.Custom, false, s.new.ID, read.Inputs, read.Outputs,
+		s.new.Parent, s.new.Protect, false, s.new.Dependencies, s.new.InitErrors, s.new.Provider,
+		s.new.PropertyDependencies, false)
+
 	// Check the user inputs using the provider inputs for defaults.
-	inputs, failures, err := prov.Check(s.new.URN, read.Inputs, s.new.Inputs, preview)
+	inputs, failures, err := prov.Check(s.new.URN, s.old.Inputs, s.new.Inputs, preview)
 	if err != nil {
-		return resource.StatusOK, nil, err
+		return rst, nil, err
 	}
 	if issueCheckErrors(s.plan, s.new, s.new.URN, failures) {
-		return resource.StatusOK, nil, errors.New("one or more inputs failed to validate")
+		return rst, nil, errors.New("one or more inputs failed to validate")
 	}
 	s.new.Inputs = inputs
 
 	// Diff the user inputs against the provider inputs. If there are any differences, fail the import.
-	diff, err := diffResource(s.new.URN, s.new.ID, read.Inputs, read.Ouptuts, s.new.Inputs, prov, preview)
+	diff, err := diffResource(s.new.URN, s.new.ID, s.old.Inputs, s.old.Outputs, s.new.Inputs, prov, preview)
 	if err != nil {
-		return resource.StatusOK, nil, err
+		return rst, nil, err
 	}
-	if s.diff.Changes != plugin.DiffNone {
+	s.diffs = diff.ChangedKeys
+
+	if diff.Changes != plugin.DiffNone {
 		const message = "inputs to import do not match the existing resource"
 
 		if preview {
@@ -794,7 +803,7 @@ func (s *ImportStep) Apply(preview bool) (resource.Status, StepCompleteFunc, err
 			err = errors.New(message)
 		}
 	}
-	return resource.StatusOK, complete, err
+	return rst, complete, err
 }
 
 // StepOp represents the kind of operation performed by a step.  It evaluates to its string label.

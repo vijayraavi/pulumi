@@ -828,7 +828,7 @@ describe("rpc", () => {
         },
         // A program that imports a single resource.
         "import_resource": {
-            program: path.join(base, "001.one_resource"),
+            program: path.join(base, "030.import_resource"),
             expectResourceCount: 1,
             registerResource: (ctx: any, dryrun: boolean, t: string, name: string, res: any, deps: string[],
                                custom: boolean, protect: boolean, parent: string, provider: string,

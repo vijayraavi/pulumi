@@ -77,7 +77,7 @@ interface ResourceResolverOperation {
     // A list of aliases applied to this resource.
     aliases: URN[];
     // An ID to import, if any.
-    importID: ID | undefined;
+    import: ID | undefined;
 }
 
 /**
@@ -186,7 +186,7 @@ export function registerResource(res: Resource, t: string, name: string, custom:
         req.setAcceptsecrets(true);
         req.setAdditionalsecretoutputsList((<any>opts).additionalSecretOutputs || []);
         req.setAliasesList(resop.aliases);
-        req.setImportid(resop.importID || "");
+        req.setImportid(resop.import || "");
 
         const propertyDependencies = req.getPropertydependenciesMap();
         for (const [key, resourceURNs] of resop.propertyToDirectDependencyURNs) {
@@ -313,7 +313,7 @@ async function prepareResource(label: string, res: Resource, custom: boolean,
             providerRef = `${providerURN}::${providerID}`;
         }
 
-        importID = (<CustomResourceOptions>opts).importID;
+        importID = (<CustomResourceOptions>opts).import;
     }
 
     // Collect the URNs for explicit/implicit dependencies for the engine so that it can understand
@@ -356,7 +356,7 @@ async function prepareResource(label: string, res: Resource, custom: boolean,
         allDirectDependencyURNs: allDirectDependencyURNs,
         propertyToDirectDependencyURNs: propertyToDirectDependencyURNs,
         aliases: aliases,
-        importID: importID,
+        import: importID,
     };
 }
 

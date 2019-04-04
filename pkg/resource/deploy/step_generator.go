@@ -196,28 +196,8 @@ func (sg *stepGenerator) GenerateSteps(event RegisterResourceEvent) ([]Step, res
 		}
 
 		// Write the ID of the resource to import into the new state and return an ImportStep.
-		s.new.ID = goal.ID
+		new.ID = goal.ID
 		return []Step{NewImportStep(sg.plan, event, new)}, nil
-
-		// If this is an import, we can terminate here. We just want the diff.
-		if isImport {
-			// This is kind of distasteful, but suppresses a bunch of noise when dealing with inexactness regarding which
-			// properties should be considered inputs in TF providers.
-			switch diff.Changes {
-			case plugin.DiffNone:
-				old.Inputs = new.Inputs
-			case plugin.DiffSome:
-				changed := make(map[resource.PropertyKey]bool)
-				for _, n := range diff.Properties {
-					changed[n] = true
-				}
-				for k := range old.Inputs {
-					if _, has := new.Inputs[k]; !has && !changed[k] {
-						delete(old.Inputs, k)
-					}
-				}
-			}
-		}
 	}
 
 	// Ensure the provider is okay with this resource and fetch the inputs to pass to subsequent methods.

@@ -152,7 +152,6 @@ type DiffResult struct {
 	ChangedKeys         []resource.PropertyKey // an optional list of keys that changed.
 	DetailedDiff        map[string]DiffKind    // an optional structured diff
 	DeleteBeforeReplace bool                   // if true, this resource must be deleted before recreating it.
-	Properties          []resource.PropertyKey // a list of properties that changed.
 }
 
 // Replace returns true if this diff represents a replacement.
