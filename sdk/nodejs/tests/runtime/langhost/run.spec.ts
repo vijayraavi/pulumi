@@ -832,7 +832,7 @@ describe("rpc", () => {
             expectResourceCount: 1,
             registerResource: (ctx: any, dryrun: boolean, t: string, name: string, res: any, deps: string[],
                                custom: boolean, protect: boolean, parent: string, provider: string,
-                               propertyDeps: any, importID: string) => {
+                               propertyDeps: any, ignoreChanges: string[], version: string, importID: string) => {
                 assert.strictEqual(t, "test:index:MyResource");
                 assert.strictEqual(name, "testResource1");
                 assert.strictEqual(importID, "testID");
@@ -913,7 +913,7 @@ describe("rpc", () => {
                                 const version: string = req.getVersion();
                                 const importID: string = req.getImportid();
                                 const { urn, id, props } = opts.registerResource(ctx, dryrun, t, name, res, deps,
-                                    custom, protect, parent, provider, propertyDeps, ignoreChanges, versionm importID);
+                                    custom, protect, parent, provider, propertyDeps, ignoreChanges, version, importID);
                                 resp.setUrn(urn);
                                 resp.setId(id);
                                 resp.setObject(gstruct.Struct.fromJavaScript(props));

@@ -722,9 +722,18 @@ func (sg *stepGenerator) diff(urn resource.URN, old, new *resource.State, oldInp
 		return plugin.DiffResult{Changes: plugin.DiffSome}, nil
 	}
 
+	return diffResource(urn, old.ID, oldInputs, oldOutputs, newInputs, prov, allowUnknowns)
+}
+
+// diffResource invokes the Diff function for the given custom resource's provider and returns the result.
+func diffResource(urn resource.URN, id resource.ID, oldInputs, oldOutputs,
+	newInputs resource.PropertyMap, prov plugin.Provider, allowUnknowns bool) (plugin.DiffResult, error) {
+
+	contract.Require(prov != nil, "prov != nil")
+
 	// Grab the diff from the provider. At this point we know that there were changes to the Pulumi inputs, so if the
 	// provider returns an "unknown" diff result, pretend it returned "diffs exist".
-	diff, err := prov.Diff(urn, old.ID, oldOutputs, newInputs, allowUnknowns)
+	diff, err := prov.Diff(urn, id, oldOutputs, newInputs, allowUnknowns)
 	if err != nil {
 		return diff, err
 	}

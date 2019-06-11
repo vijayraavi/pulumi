@@ -19,7 +19,6 @@ import (
 	"strings"
 
 	"github.com/pkg/errors"
-	"github.com/pulumi/pulumi/pkg/diag"
 
 	"github.com/pulumi/pulumi/pkg/diag"
 	"github.com/pulumi/pulumi/pkg/diag/colors"
@@ -712,11 +711,12 @@ func (s *RefreshStep) Apply(preview bool) (resource.Status, StepCompleteFunc, er
 }
 
 type ImportStep struct {
-	plan  *Plan                  // the current plan.
-	reg   RegisterResourceEvent  // the registration intent to convey a URN back to.
-	old   *resource.State        // the state of the resource fetched from the provider.
-	new   *resource.State        // the newly computed state of the resource after importing.
-	diffs []resource.PropertyKey // any keys that differed between the user's program and the actual state.
+	plan     *Plan                  // the current plan.
+	reg      RegisterResourceEvent  // the registration intent to convey a URN back to.
+	old      *resource.State        // the state of the resource fetched from the provider.
+	new      *resource.State        // the newly computed state of the resource after importing.
+	diffs    []resource.PropertyKey // any keys that differed between the user's program and the actual state.
+	richDiff map[string]string      // the structured property diff.
 }
 
 func NewImportStep(plan *Plan, reg RegisterResourceEvent, new *resource.State) Step {
@@ -744,6 +744,7 @@ func (s *ImportStep) New() *resource.State          { return s.new }
 func (s *ImportStep) Res() *resource.State          { return s.new }
 func (s *ImportStep) Logical() bool                 { return true }
 func (s *ImportStep) Diffs() []resource.PropertyKey { return s.diffs }
+func (s *ImportStep) RichDiff() map[string]string   { return s.richDiff }
 
 func (s *ImportStep) Apply(preview bool) (resource.Status, StepCompleteFunc, error) {
 	complete := func() { s.reg.Done(&RegisterResult{State: s.new}) }
@@ -775,7 +776,7 @@ func (s *ImportStep) Apply(preview bool) (resource.Status, StepCompleteFunc, err
 	// Magic up an old state so the frontend can display a proper diff.
 	s.old = resource.NewState(s.new.Type, s.new.URN, s.new.Custom, false, s.new.ID, read.Inputs, read.Outputs,
 		s.new.Parent, s.new.Protect, false, s.new.Dependencies, s.new.InitErrors, s.new.Provider,
-		s.new.PropertyDependencies, false)
+		s.new.PropertyDependencies, false, nil, nil)
 
 	// Check the user inputs using the provider inputs for defaults.
 	inputs, failures, err := prov.Check(s.new.URN, s.old.Inputs, s.new.Inputs, preview)
@@ -792,7 +793,7 @@ func (s *ImportStep) Apply(preview bool) (resource.Status, StepCompleteFunc, err
 	if err != nil {
 		return rst, nil, err
 	}
-	s.diffs = diff.ChangedKeys
+	s.diffs, s.richDiff = diff.ChangedKeys, diff.RichDiff
 
 	if diff.Changes != plugin.DiffNone {
 		const message = "inputs to import do not match the existing resource"
