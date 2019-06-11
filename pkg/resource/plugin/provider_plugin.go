@@ -562,8 +562,8 @@ func (p *provider) Diff(urn resource.URN, id resource.ID,
 
 	changes := resp.GetChanges()
 	deleteBeforeReplace := resp.GetDeleteBeforeReplace()
-	logging.V(7).Infof("%s success: changes=%d #replaces=%v #stables=%v delbefrepl=%v, diffs=#%v",
-		label, changes, replaces, stables, deleteBeforeReplace, diffs)
+	logging.V(7).Infof("%s success: changes=%d #replaces=%v #stables=%v delbefrepl=%v, diffs=#%v, richdiff=%v (%#v)",
+		label, changes, replaces, stables, deleteBeforeReplace, diffs, resp.GetRichDiff(), resp.GetRichDiff() == nil)
 
 	return DiffResult{
 		Changes:             DiffChanges(changes),

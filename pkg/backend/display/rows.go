@@ -482,8 +482,6 @@ func (data *resourceRowData) getDiffInfo(step engine.StepEventMetadata) string {
 				return keys
 			}
 			if include := step.Diffs; include != nil {
-				fmt.Printf("using diff list\n")
-
 				includeSet := make(map[resource.PropertyKey]bool)
 				for _, k := range include {
 					includeSet[k] = true
