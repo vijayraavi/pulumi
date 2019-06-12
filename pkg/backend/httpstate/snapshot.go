@@ -16,6 +16,7 @@ package httpstate
 
 import (
 	"context"
+	"os"
 
 	"github.com/pkg/errors"
 	"github.com/pulumi/pulumi/pkg/backend"
@@ -47,6 +48,11 @@ func (persister *cloudSnapshotPersister) Save(snapshot *deploy.Snapshot) error {
 	if err != nil {
 		return errors.Wrap(err, "serializing deployment")
 	}
+
+	if os.Getenv("EXP_ZERO_ALL_RESOURCES") != "" {
+		deployment.Resources = nil
+	}
+
 	return persister.backend.client.PatchUpdateCheckpoint(persister.context, persister.update, deployment, token)
 }
 

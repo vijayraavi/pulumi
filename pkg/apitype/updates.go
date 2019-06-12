@@ -133,7 +133,7 @@ type UpdateResults struct {
 	Status UpdateStatus  `json:"status"`
 	Events []UpdateEvent `json:"events"`
 
-	// ContinuationToken is an opaque value used to indiciate the end of the returned update
+	// ContinuationToken is an opaque value used to indicate the end of the returned update
 	// results. Pass it in the next request to obtain subsequent update events.
 	//
 	// The same continuation token may be returned if no new update events are available, but the

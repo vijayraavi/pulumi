@@ -15,8 +15,10 @@
 package backend
 
 import (
+	"os"
 	"reflect"
 	"sort"
+	"strconv"
 	"time"
 
 	"github.com/pkg/errors"
@@ -540,6 +542,7 @@ func NewSnapshotManager(persister SnapshotPersister, baseSnap *deploy.Snapshot) 
 		done:             done,
 	}
 
+	savesAttempted := 0
 	go func() {
 		// True if we have elided writes since the last actual write.
 		hasElidedWrites := false
@@ -551,7 +554,21 @@ func NewSnapshotManager(persister SnapshotPersister, baseSnap *deploy.Snapshot) 
 			case request := <-mutationRequests:
 				var err error
 				if request.mutator() {
-					err = manager.saveSnapshot()
+
+					savesAttempted++
+					if os.Getenv("EXP_SKIP_ALL_SNAPSHOT_SAVES") != "" {
+						// Nothing.
+					} else if os.Getenv("EXP_INFREQUENT_SNAPSHOT_SAVES") != "" {
+						mod, parseErr := strconv.Atoi(os.Getenv("EXP_INFREQUENT_SNAPSHOT_SAVES"))
+						if parseErr != nil {
+							panic(parseErr)
+						}
+						if savesAttempted%mod == 0 {
+							err = manager.saveSnapshot()
+						}
+					} else {
+						err = manager.saveSnapshot()
+					}
 					hasElidedWrites = false
 				} else {
 					hasElidedWrites = true
