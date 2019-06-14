@@ -190,10 +190,7 @@ func (sg *stepGenerator) GenerateSteps(event RegisterResourceEvent) ([]Step, res
 	// resource's ID does not match the ID in the goal state.
 	isImport := goal.Custom && goal.ID != "" && (!hasOld || old.External || old.ID != goal.ID)
 	if isImport {
-		// If there was an old resource, schedule it for deletion.
-		if hasOld && !recreating {
-			old.Delete = true
-		}
+		// TODO(pdg): import-replace: hasOld && !recreating
 
 		// Write the ID of the resource to import into the new state and return an ImportStep.
 		new.ID = goal.ID
@@ -332,6 +329,8 @@ func (sg *stepGenerator) GenerateSteps(event RegisterResourceEvent) ([]Step, res
 		// If there were changes, check for a replacement vs. an in-place update.
 		if diff.Changes == plugin.DiffSome {
 			if diff.Replace() {
+				// TODO(pdg): issue an error if the RR for this replacement specified an import ID
+
 				sg.replaces[urn] = true
 
 				// If we are going to perform a replacement, we need to recompute the default values.  The above logic

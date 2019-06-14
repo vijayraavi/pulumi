@@ -307,7 +307,7 @@ func renderDiffResourceOutputsEvent(
 		// If this is the output step for an import, we actually want to display the diff at this point.
 		if payload.Metadata.Op == deploy.OpImport {
 			renderDiff(out, payload.Metadata, payload.Planning, payload.Debug, seen, opts)
-			//return out.String()
+			return out.String()
 		}
 
 		indent := engine.GetIndent(payload.Metadata, seen)
