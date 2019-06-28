@@ -11,7 +11,6 @@ require (
 	github.com/blang/semver v3.5.1+incompatible
 	github.com/cheggaaa/pb v1.0.18
 	github.com/cpuguy83/go-md2man v1.0.8 // indirect
-	github.com/davecgh/go-spew v1.1.1
 	github.com/djherbis/times v1.0.1
 	github.com/docker/docker v1.13.1
 	github.com/dustin/go-humanize v1.0.0

@@ -257,8 +257,8 @@ func renderDiff(
 	seen map[resource.URN]engine.StepEventMetadata,
 	opts Options) {
 
-	indent := engine.GetIndent(payload.Metadata, seen)
-	summary := engine.GetResourcePropertiesSummary(payload.Metadata, indent)
+	indent := engine.GetIndent(metadata, seen)
+	summary := engine.GetResourcePropertiesSummary(metadata, indent)
 
 	var details string
 	if metadata.DetailedDiff != nil {

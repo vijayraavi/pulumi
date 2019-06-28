@@ -251,7 +251,10 @@ func GetResourceOutputsPropertiesString(
 	// the upshot is that either way we're ending up with outputs that are exactly accurate. If we are not sure that we
 	// are in one of the above states, we shouldn't try to print outputs.
 	if planning {
-		printOutputDuringPlanning := refresh || step.Op == deploy.OpRead || step.Op == deploy.OpReadReplacement || step.Op == deploy.OpImport
+		printOutputDuringPlanning := refresh ||
+			step.Op == deploy.OpRead ||
+			step.Op == deploy.OpReadReplacement ||
+			step.Op == deploy.OpImport
 		if !printOutputDuringPlanning {
 			return ""
 		}
