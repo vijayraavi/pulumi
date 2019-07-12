@@ -187,7 +187,7 @@ func (s *CreateStep) Apply(preview bool) (resource.Status, StepCompleteFunc, err
 				return resource.StatusOK, nil, err
 			}
 
-			var timeout string
+			var timeout float64
 			if s.new.CustomTimeouts != nil {
 				timeout = s.new.CustomTimeouts.Create
 			}
@@ -312,7 +312,7 @@ func (s *DeleteStep) Apply(preview bool) (resource.Status, StepCompleteFunc, err
 				return resource.StatusOK, nil, err
 			}
 
-			var timeout string
+			var timeout float64
 			if s.old.CustomTimeouts != nil {
 				timeout = s.old.CustomTimeouts.Delete
 			}
@@ -420,7 +420,7 @@ func (s *UpdateStep) Apply(preview bool) (resource.Status, StepCompleteFunc, err
 				return resource.StatusOK, nil, err
 			}
 
-			var timeout string
+			var timeout float64
 			if s.new.CustomTimeouts != nil {
 				timeout = s.new.CustomTimeouts.Update
 			}

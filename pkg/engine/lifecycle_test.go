@@ -2102,7 +2102,7 @@ func TestProviderCancellation(t *testing.T) {
 		deploytest.NewProviderLoader("pkgA", semver.MustParse("1.0.0"), func() (plugin.Provider, error) {
 			return &deploytest.Provider{
 				CreateF: func(urn resource.URN,
-					inputs resource.PropertyMap, timeout string) (resource.ID, resource.PropertyMap,
+					inputs resource.PropertyMap, timeout float64) (resource.ID, resource.PropertyMap,
 					resource.Status, error) {
 
 					// Inform the waiter that we've entered a provider op and wait for cancellation.
@@ -2223,7 +2223,7 @@ func TestUpdatePartialFailure(t *testing.T) {
 				},
 
 				UpdateF: func(urn resource.URN, id resource.ID, olds,
-					news resource.PropertyMap, timeout string) (resource.PropertyMap, resource.Status, error) {
+					news resource.PropertyMap, timeout float64) (resource.PropertyMap, resource.Status, error) {
 					outputs := resource.NewPropertyMapFromMap(map[string]interface{}{
 						"output_prop": 42,
 					})
@@ -3631,7 +3631,7 @@ func TestImport(t *testing.T) {
 					}, nil
 				},
 				CreateF: func(urn resource.URN,
-					news resource.PropertyMap, timeout string) (resource.ID, resource.PropertyMap, resource.Status, error) {
+					news resource.PropertyMap, timeout float64) (resource.ID, resource.PropertyMap, resource.Status, error) {
 
 					return "created-id", news, resource.StatusOK, nil
 				},
@@ -3863,7 +3863,7 @@ func TestCustomTimeouts(t *testing.T) {
 	program := deploytest.NewLanguageRuntime(func(_ plugin.RunInfo, monitor *deploytest.ResourceMonitor) error {
 		_, _, _, err := monitor.RegisterResource("pkgA:m:typA", "resA", true, "", false, nil, "",
 			resource.PropertyMap{}, nil, false, "", nil, nil, "", &resource.CustomTimeouts{
-				Create: "1m", Delete: "1m", Update: "4m",
+				Create: 60, Delete: 60, Update: 240,
 			})
 		assert.NoError(t, err)
 		return nil

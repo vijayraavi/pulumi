@@ -17,12 +17,12 @@ package deploy
 import (
 	"context"
 	"fmt"
-
 	"github.com/blang/semver"
 	pbempty "github.com/golang/protobuf/ptypes/empty"
 	"github.com/pkg/errors"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
+	"time"
 
 	"github.com/pulumi/pulumi/pkg/resource"
 	"github.com/pulumi/pulumi/pkg/resource/deploy/providers"
@@ -751,13 +751,13 @@ func (rm *resmon) RegisterResource(ctx context.Context,
 	var timeouts resource.CustomTimeouts
 	if customTimeouts != nil {
 		if customTimeouts.Create != "" {
-			timeouts.Create = customTimeouts.Create
+			timeouts.Create = generateTimeoutInSeconds(customTimeouts.Create)
 		}
 		if customTimeouts.Delete != "" {
-			timeouts.Delete = customTimeouts.Delete
+			timeouts.Delete = generateTimeoutInSeconds(customTimeouts.Delete)
 		}
 		if customTimeouts.Update != "" {
-			timeouts.Update = customTimeouts.Update
+			timeouts.Update = generateTimeoutInSeconds(customTimeouts.Update)
 		}
 	}
 
@@ -938,4 +938,15 @@ func (g *readResourceEvent) AdditionalSecretOutputs() []resource.PropertyKey {
 }
 func (g *readResourceEvent) Done(result *ReadResult) {
 	g.done <- result
+}
+
+func generateTimeoutInSeconds(timeout string) float64 {
+	duration, err := time.ParseDuration(timeout)
+	if err != nil {
+		logging.V(5).Infof("ResourceMonitor.RegisterResource unable to parse customTimeout Value %s",
+			timeout)
+		return 0
+	}
+
+	return duration.Seconds()
 }
