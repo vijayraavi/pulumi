@@ -17,6 +17,7 @@ package engine
 import (
 	"context"
 	"fmt"
+	"github.com/y0ssar1an/q"
 	"reflect"
 	"strconv"
 	"strings"
@@ -3872,7 +3873,17 @@ func TestCustomTimeouts(t *testing.T) {
 
 	p := &TestPlan{
 		Options: UpdateOptions{host: host},
-		Steps:   MakeBasicLifecycleSteps(t, 2),
 	}
-	p.Run(t, nil)
+
+	p.Steps = []TestStep{{Op: Update}}
+	snap := p.Run(t, nil)
+	q.Q(snap)
+
+	assert.Len(t, snap.Resources, 2)
+	assert.Equal(t, string(snap.Resources[0].URN.Name()), "default")
+	assert.Equal(t, string(snap.Resources[1].URN.Name()), "resA")
+	assert.NotNil(t, snap.Resources[1].CustomTimeouts)
+	assert.Equal(t, snap.Resources[1].CustomTimeouts.Create, float64(60))
+	assert.Equal(t, snap.Resources[1].CustomTimeouts.Update, float64(240))
+	assert.Equal(t, snap.Resources[1].CustomTimeouts.Delete, float64(60))
 }

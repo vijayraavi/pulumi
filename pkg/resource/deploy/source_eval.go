@@ -297,8 +297,8 @@ func (d *defaultProviders) newRegisterDefaultProviderEvent(
 	done := make(chan *RegisterResult)
 	event := &registerResourceEvent{
 		goal: resource.NewGoal(
-			providers.MakeProviderType(req.Package()),
-			req.Name(), true, inputs, "", false, nil, "", nil, nil, false, nil, nil, nil, "", nil),
+		providers.MakeProviderType(req.Package()),
+		req.Name(), true, inputs, "", false, nil, "", nil, nil, false, nil, nil, nil, "", nil),
 		done: done,
 	}
 	return event, done, nil
@@ -751,13 +751,25 @@ func (rm *resmon) RegisterResource(ctx context.Context,
 	var timeouts resource.CustomTimeouts
 	if customTimeouts != nil {
 		if customTimeouts.Create != "" {
-			timeouts.Create = generateTimeoutInSeconds(customTimeouts.Create)
+			seconds, err := generateTimeoutInSeconds(customTimeouts.Create)
+			if err != nil {
+				return nil, err
+			}
+			timeouts.Create = seconds
 		}
 		if customTimeouts.Delete != "" {
-			timeouts.Delete = generateTimeoutInSeconds(customTimeouts.Delete)
+			seconds, err := generateTimeoutInSeconds(customTimeouts.Delete)
+			if err != nil {
+				return nil, err
+			}
+			timeouts.Delete = seconds
 		}
 		if customTimeouts.Update != "" {
-			timeouts.Update = generateTimeoutInSeconds(customTimeouts.Update)
+			seconds, err := generateTimeoutInSeconds(customTimeouts.Update)
+			if err != nil {
+				return nil, err
+			}
+			timeouts.Update = seconds
 		}
 	}
 
@@ -940,13 +952,11 @@ func (g *readResourceEvent) Done(result *ReadResult) {
 	g.done <- result
 }
 
-func generateTimeoutInSeconds(timeout string) float64 {
+func generateTimeoutInSeconds(timeout string) (float64, error) {
 	duration, err := time.ParseDuration(timeout)
 	if err != nil {
-		logging.V(5).Infof("ResourceMonitor.RegisterResource unable to parse customTimeout Value %s",
-			timeout)
-		return 0
+		return 0, errors.Errorf("unable to parse customTimeout Value %s", timeout)
 	}
 
-	return duration.Seconds()
+	return duration.Seconds(), nil
 }
