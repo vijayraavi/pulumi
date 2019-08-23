@@ -3,6 +3,9 @@ CHANGELOG
 
 ## HEAD (Unreleased)
 
+- Fix the --stack option of the `pulumi new` command.
+  ([#3131](https://github.com/pulumi/pulumi/pull/3131) fixes [#2880](https://github.com/pulumi/pulumi/issues/2880))
+
 ## 1.0.0-beta.4 (2019-08-22)
 
 - Fix a crash when using StackReference from the `1.0.0-beta.3` version of
