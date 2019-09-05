@@ -28,6 +28,7 @@ import (
 	"github.com/pulumi/pulumi/pkg/resource/deploy"
 	"github.com/pulumi/pulumi/pkg/secrets"
 	"github.com/pulumi/pulumi/pkg/util/contract"
+	"github.com/pulumi/pulumi/pkg/util/logging"
 	"github.com/pulumi/pulumi/pkg/workspace"
 )
 
@@ -48,6 +49,11 @@ var (
 	// untyped deployment being deserialized is too new to understand.
 	ErrDeploymentSchemaVersionTooNew = fmt.Errorf("this stack's deployment version is too new")
 )
+
+type secretContext struct {
+	plaintext  string
+	ciphertext string
+}
 
 // SerializeDeployment serializes an entire snapshot as a deploy record.
 func SerializeDeployment(snap *deploy.Snapshot, sm secrets.Manager) (*apitype.DeploymentV3, error) {
@@ -361,11 +367,27 @@ func SerializePropertyValue(prop resource.PropertyValue, enc config.Encrypter) (
 		if err != nil {
 			return nil, errors.Wrap(err, "encoding serialized property value")
 		}
-		ciphertext, err := enc.EncryptValue(string(bytes))
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to encrypt secret value")
+		plaintext := string(bytes)
+
+		context, hasContext := prop.SecretValue().Context.(*secretContext)
+
+		logging.V(7).Infof("secret context: %v -> %#v", hasContext, context)
+
+		var ciphertext string
+		if hasContext && context.plaintext == plaintext {
+			contract.Assert(context.ciphertext != "")
+			ciphertext = context.ciphertext
+		} else {
+			ciphertext, err = enc.EncryptValue(plaintext)
+			if err != nil {
+				return nil, errors.Wrap(err, "failed to encrypt secret value")
+			}
+			if !hasContext {
+				context = &secretContext{}
+				prop.SecretValue().Context = context
+			}
+			context.plaintext, context.ciphertext = plaintext, ciphertext
 		}
-		contract.AssertNoErrorf(err, "marshalling underlying secret value to JSON")
 		return apitype.SecretV1{
 			Sig:        resource.SecretSig,
 			Ciphertext: ciphertext,
@@ -476,7 +498,14 @@ func DeserializePropertyValue(v interface{}, dec config.Decrypter) (resource.Pro
 					if err != nil {
 						return resource.PropertyValue{}, err
 					}
-					return resource.MakeSecret(ev), nil
+					secret := &resource.Secret{
+						Element: ev,
+						Context: &secretContext{
+							ciphertext: ciphertext,
+							plaintext:  plaintext,
+						},
+					}
+					return resource.NewSecretProperty(secret), nil
 				default:
 					return resource.PropertyValue{}, errors.Errorf("unrecognized signature '%v' in property map", sig)
 				}
